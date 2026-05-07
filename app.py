@@ -8,7 +8,7 @@ import time
 # --- SYSTEM CONFIGURATION ---
 load_dotenv()
 
-# Secure Key Logic: Handles Cloud Secrets vs Local .env fallback
+# Logic: Check for Streamlit Cloud Secrets first. Fallback to Local .env.
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except (KeyError, FileNotFoundError, AttributeError, Exception):
@@ -16,8 +16,6 @@ except (KeyError, FileNotFoundError, AttributeError, Exception):
 
 if api_key:
     genai.configure(api_key=api_key)
-    # Using gemini-1.5-flash for high-speed synthesis
-    MODEL_ID = "gemini-1.5-flash" 
 else:
     st.error("SYSTEM AUTHENTICATION FAILED: API Key missing.")
 
@@ -139,12 +137,25 @@ with tab_cmd:
                     lang_inst = f"Output in {language}." if language != "English" else ""
                     final_prompt = f"Role: {SYSTEM_PROMPTS[task]}\\nConstraint: {tone}. {lang_inst}\\nData: {user_input}"
                     
-                    # Stable logic for generative model
-                    model = genai.GenerativeModel(MODEL_ID)
-                    response = model.generate_content(final_prompt)
+                    # --- MULTI-MODEL FALLBACK LOGIC (THE 404 FIX) ---
+                    response = None
+                    # List of models to try in order of preference
+                    models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
                     
-                    st.session_state.ai_result = response.text
-                    status.update(label="COMPLETE", state="complete", expanded=False)
+                    for model_name in models_to_try:
+                        try:
+                            model = genai.GenerativeModel(model_name)
+                            response = model.generate_content(final_prompt)
+                            if response:
+                                break
+                        except Exception:
+                            continue # Try the next model in the list
+                    
+                    if response:
+                        st.session_state.ai_result = response.text
+                        status.update(label="COMPLETE", state="complete", expanded=False)
+                    else:
+                        st.error("Engine failed to initialize with any available models.")
                 except Exception as e:
                     st.error(f"ENGINE_ERROR: {str(e)}")
 
