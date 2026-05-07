@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 from prompts import SYSTEM_PROMPTS
 import time
@@ -8,16 +8,18 @@ import time
 # --- SYSTEM CONFIGURATION ---
 load_dotenv()
 
-# Logic: Check for Streamlit Cloud Secrets first. Fallback to Local .env.
+# Logic: Check for Cloud Secrets first, fallback to Local .env
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except (KeyError, FileNotFoundError, AttributeError, Exception):
     api_key = os.getenv("GOOGLE_API_KEY")
 
 if api_key:
-    genai.configure(api_key=api_key)
+    # Initialize the New GenAI Client
+    client = genai.Client(api_key=api_key)
 else:
-    st.error("SYSTEM AUTHENTICATION FAILED: API Key missing.")
+    st.error("SYSTEM AUTHENTICATION FAILED: No API Key found in .env file.")
+    st.stop()
 
 # --- THE PURE DARK AUSTIN THEME ---
 def apply_austin_theme():
@@ -82,18 +84,17 @@ if "user_input" not in st.session_state:
 if "ai_result" not in st.session_state:
     st.session_state.ai_result = ""
 
-# --- INITIALIZATION ---
+# --- UI INITIALIZATION ---
 st.set_page_config(page_title="AUSTIN AI", layout="wide")
 apply_austin_theme()
 
-# --- HEADER: EXECUTIVE BRANDING ---
+# --- HEADER ---
 c1, c2 = st.columns([0.8, 0.2])
 with c1:
     st.markdown("<h1 style='letter-spacing: 4px; color: #00f2ff; margin-bottom: 0;'>AUSTIN AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #64ffda; font-weight: 500; font-size: 1.2rem; letter-spacing: 2px;'>BSc MATHEMATICAL SCIENCES</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64ffda; font-weight: 500; font-size: 1.2rem;'>BSc MATHEMATICAL SCIENCES | UNIVERSITY OF LIMPOPO</p>", unsafe_allow_html=True)
 with c2:
-    st.write(" ")
-    if st.button("[ RESET_SYSTEM ]"):
+    if st.button("[ RESET_CORE ]"):
         if os.path.exists(SAVE_FILE): os.remove(SAVE_FILE)
         st.session_state.user_input = ""
         st.session_state.ai_result = ""
@@ -114,7 +115,6 @@ with st.sidebar:
     st.markdown("<b style='color: #64ffda;'>ENGINEER_STAMP</b>", unsafe_allow_html=True)
     st.markdown("<p style='color: #ccd6f6; margin-bottom: 0;'>R. Austin Mmola</p>", unsafe_allow_html=True)
     st.caption("Computer Science & Statistics")
-    st.caption("Midrand Node // 2026")
 
 # --- WORKSPACE ---
 tab_cmd, tab_data = st.tabs(["[ TERMINAL ]", "[ METRICS ]"])
@@ -122,8 +122,7 @@ tab_cmd, tab_data = st.tabs(["[ TERMINAL ]", "[ METRICS ]"])
 with tab_cmd:
     user_input = st.text_area("DATA_INJECTION_POINT", 
                               value=st.session_state.user_input, 
-                              height=320,
-                              placeholder="Inject data for AI synthesis...")
+                              height=320)
 
     if user_input != st.session_state.user_input:
         st.session_state.user_input = user_input
@@ -131,33 +130,26 @@ with tab_cmd:
 
     if st.button("EXECUTE_TRANSFORMATION"):
         if user_input:
-            with st.status("Solving for output...", expanded=True) as status:
+            with st.status("Neural Synthesis in progress...", expanded=True) as status:
                 try:
                     time.sleep(0.4)
                     lang_inst = f"Output in {language}." if language != "English" else ""
                     final_prompt = f"Role: {SYSTEM_PROMPTS[task]}\\nConstraint: {tone}. {lang_inst}\\nData: {user_input}"
                     
-                    # --- MULTI-MODEL FALLBACK LOGIC (THE 404 FIX) ---
-                    response = None
-                    # List of models to try in order of preference
-                    models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
-                    
-                    for model_name in models_to_try:
-                        try:
-                            model = genai.GenerativeModel(model_name)
-                            response = model.generate_content(final_prompt)
-                            if response:
-                                break
-                        except Exception:
-                            continue # Try the next model in the list
-                    
-                    if response:
+                    # --- DIRECT CALL WITH ERROR CAPTURE ---
+                    try:
+                        response = client.models.generate_content(
+                            model='gemini-1.5-flash',
+                            contents=final_prompt
+                        )
                         st.session_state.ai_result = response.text
-                        status.update(label="COMPLETE", state="complete", expanded=False)
-                    else:
-                        st.error("Engine failed to initialize with any available models.")
+                        status.update(label="SYNTHESIS COMPLETE", state="complete", expanded=False)
+                    except Exception as api_err:
+                        # This prints the REAL reason it fails to the screen
+                        st.error(f"ENGINE FAILURE: {str(api_err)}")
+                        st.info("Ensure your API key in the .env file is correct.")
                 except Exception as e:
-                    st.error(f"ENGINE_ERROR: {str(e)}")
+                    st.error(f"SYSTEM_ERROR: {str(e)}")
 
 with tab_data:
     st.subheader("Data Analytics")
@@ -170,8 +162,6 @@ if st.session_state.ai_result:
     st.markdown('<div class="result-card">', unsafe_allow_html=True)
     st.markdown(st.session_state.ai_result)
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.write(" ")
     st.download_button("📩 EXPORT_LOG", st.session_state.ai_result, file_name="AUSTIN_AI_DATA.txt")
 
 # --- FOOTER ---
