@@ -1,19 +1,25 @@
 import streamlit as st
 import os
-from google import genai
+import google.generativeai as genai
 from dotenv import load_dotenv
 from prompts import SYSTEM_PROMPTS
 import time
 
-# Setup
+# --- SYSTEM CONFIGURATION ---
 load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
+
+# Secure Key Logic: Handles Cloud Secrets vs Local .env fallback
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+except (KeyError, FileNotFoundError, AttributeError, Exception):
+    api_key = os.getenv("GOOGLE_API_KEY")
 
 if api_key:
-    client = genai.Client(api_key=api_key)
-    MODEL_ID = "gemini-2.5-flash"
+    genai.configure(api_key=api_key)
+    # Using gemini-1.5-flash for high-speed synthesis
+    MODEL_ID = "gemini-1.5-flash" 
 else:
-    st.error("SYSTEM AUTHENTICATION FAILED.")
+    st.error("SYSTEM AUTHENTICATION FAILED: API Key missing.")
 
 # --- THE PURE DARK AUSTIN THEME ---
 def apply_austin_theme():
@@ -21,19 +27,16 @@ def apply_austin_theme():
         <style>
         .stApp {
             background-color: #050505;
-            background-image: 
-                radial-gradient(circle at 2px 2px, rgba(0, 242, 255, 0.08) 1px, transparent 0);
+            background-image: radial-gradient(circle at 2px 2px, rgba(0, 242, 255, 0.08) 1px, transparent 0);
             background-size: 35px 35px;
             color: #ccd6f6;
             font-family: 'JetBrains Mono', monospace;
         }
-
         section[data-testid="stSidebar"] {
             background: rgba(10, 25, 47, 0.95) !important;
             backdrop-filter: blur(15px);
             border-right: 1px solid #00f2ff;
         }
-
         .result-card {
             background: rgba(17, 34, 64, 0.6);
             border: 1px solid #00f2ff;
@@ -46,56 +49,30 @@ def apply_austin_theme():
         .result-card::before {
             content: "INTEL_OUTPUT_v3.2";
             position: absolute;
-            top: -10px;
-            left: 15px;
-            background: #00f2ff;
-            color: #050505;
-            font-size: 10px;
-            padding: 2px 10px;
-            font-weight: bold;
+            top: -10px; left: 15px;
+            background: #00f2ff; color: #050505;
+            font-size: 10px; padding: 2px 10px; font-weight: bold;
         }
-
         .stButton>button {
-            background: transparent;
-            color: #00f2ff;
-            border: 1px solid #00f2ff;
-            border-radius: 2px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            transition: all 0.4s;
-            height: 3.5em;
-            width: 100%;
+            background: transparent; color: #00f2ff; border: 1px solid #00f2ff;
+            border-radius: 2px; text-transform: uppercase; letter-spacing: 2px;
+            transition: all 0.4s; height: 3.5em; width: 100%;
         }
         .stButton>button:hover {
-            background: #00f2ff;
-            color: #050505;
+            background: #00f2ff !important; color: #050505 !important;
             box-shadow: 0 0 30px rgba(0, 242, 255, 0.5);
         }
-
         .stTextArea textarea {
             background-color: rgba(2, 12, 27, 0.8) !important;
-            color: #00f2ff !important;
-            border: 1px solid #233554 !important;
+            color: #00f2ff !important; border: 1px solid #233554 !important;
         }
-
-        .stSelectbox div[data-baseweb="select"] {
-            background-color: #112240 !important;
-            color: #00f2ff !important;
-        }
-        
-        [data-testid="stMetricValue"] {
-            color: #64ffda !important;
-        }
-        [data-testid="stMetricLabel"] {
-            color: #8892b0 !important;
-        }
-
+        [data-testid="stMetricValue"] { color: #64ffda !important; }
         footer {visibility: hidden;}
         header {visibility: hidden;}
         </style>
     """, unsafe_allow_html=True)
 
-# --- STORAGE ---
+# --- DATA PERSISTENCE ---
 SAVE_FILE = "last_session.txt"
 def save_session(text):
     with open(SAVE_FILE, "w", encoding="utf-8") as f: f.write(text)
@@ -107,11 +84,11 @@ if "user_input" not in st.session_state:
 if "ai_result" not in st.session_state:
     st.session_state.ai_result = ""
 
-# --- INIT ---
+# --- INITIALIZATION ---
 st.set_page_config(page_title="AUSTIN AI", layout="wide")
 apply_austin_theme()
 
-# --- HEADER: CLEAN BRANDING ---
+# --- HEADER: EXECUTIVE BRANDING ---
 c1, c2 = st.columns([0.8, 0.2])
 with c1:
     st.markdown("<h1 style='letter-spacing: 4px; color: #00f2ff; margin-bottom: 0;'>AUSTIN AI</h1>", unsafe_allow_html=True)
@@ -147,7 +124,7 @@ tab_cmd, tab_data = st.tabs(["[ TERMINAL ]", "[ METRICS ]"])
 with tab_cmd:
     user_input = st.text_area("DATA_INJECTION_POINT", 
                               value=st.session_state.user_input, 
-                              height=320, 
+                              height=320,
                               placeholder="Inject data for AI synthesis...")
 
     if user_input != st.session_state.user_input:
@@ -162,19 +139,22 @@ with tab_cmd:
                     lang_inst = f"Output in {language}." if language != "English" else ""
                     final_prompt = f"Role: {SYSTEM_PROMPTS[task]}\\nConstraint: {tone}. {lang_inst}\\nData: {user_input}"
                     
-                    response = client.models.generate_content(model=MODEL_ID, contents=final_prompt)
+                    # Stable logic for generative model
+                    model = genai.GenerativeModel(MODEL_ID)
+                    response = model.generate_content(final_prompt)
+                    
                     st.session_state.ai_result = response.text
                     status.update(label="COMPLETE", state="complete", expanded=False)
                 except Exception as e:
-                    st.error(f"ERROR: {str(e)}")
+                    st.error(f"ENGINE_ERROR: {str(e)}")
 
 with tab_data:
     st.subheader("Data Analytics")
     col_x, col_y = st.columns(2)
-    col_x.metric("Word Count", len(user_input.split()))
-    col_y.metric("Character Count", len(user_input))
+    col_x.metric("Word Count (n)", len(user_input.split()))
+    col_y.metric("Character Count (c)", len(user_input))
 
-# --- OUTPUT ---
+# --- OUTPUT ARCHITECTURE ---
 if st.session_state.ai_result:
     st.markdown('<div class="result-card">', unsafe_allow_html=True)
     st.markdown(st.session_state.ai_result)
