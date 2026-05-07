@@ -8,14 +8,12 @@ import time
 # --- SYSTEM CONFIGURATION ---
 load_dotenv()
 
-# Universal Key Logic: Prioritize Streamlit Cloud Secrets, fallback to Local .env
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except (KeyError, FileNotFoundError, AttributeError, Exception):
     api_key = os.getenv("GOOGLE_API_KEY")
 
 if api_key:
-    # Initialize the Modern GenAI Client
     client = genai.Client(api_key=api_key)
 else:
     st.error("SYSTEM AUTHENTICATION FAILED: API Key missing.")
@@ -84,7 +82,6 @@ if "user_input" not in st.session_state:
 if "ai_result" not in st.session_state:
     st.session_state.ai_result = ""
 
-# --- UI INITIALIZATION ---
 st.set_page_config(page_title="AUSTIN AI", layout="wide")
 apply_austin_theme()
 
@@ -123,8 +120,7 @@ tab_cmd, tab_data = st.tabs(["[ TERMINAL ]", "[ METRICS ]"])
 with tab_cmd:
     user_input = st.text_area("DATA_INJECTION_POINT", 
                               value=st.session_state.user_input, 
-                              height=320,
-                              placeholder="Inject data for AI synthesis...")
+                              height=320)
 
     if user_input != st.session_state.user_input:
         st.session_state.user_input = user_input
@@ -138,9 +134,8 @@ with tab_cmd:
                     lang_inst = f"Output in {language}." if language != "English" else ""
                     final_prompt = f"Role: {SYSTEM_PROMPTS[task]}\\nConstraint: {tone}. {lang_inst}\\nData: {user_input}"
                     
-                    # --- THE 404 BYPASS LOGIC (Multi-Model Handshake) ---
+                    # --- THE FINAL RECOVERY LOOP ---
                     response = None
-                    # List of stable model names to try in sequence
                     models_to_try = ["gemini-1.5-flash", "gemini-1.0-pro"]
                     
                     for model_name in models_to_try:
@@ -152,29 +147,21 @@ with tab_cmd:
                             if response:
                                 break
                         except Exception:
-                            continue # Try the next available model
+                            continue
                     
                     if response:
                         st.session_state.ai_result = response.text
                         status.update(label="SYNTHESIS COMPLETE", state="complete", expanded=False)
                     else:
-                        st.error("ENGINE FAILURE: Your API Key does not have permission for the requested models.")
+                        st.error("ENGINE FAILURE: Permission denied. Please check your API project settings.")
                 except Exception as e:
                     st.error(f"SYSTEM_ERROR: {str(e)}")
-
-with tab_data:
-    st.subheader("Data Analytics")
-    col_x, col_y = st.columns(2)
-    col_x.metric("Word Count (n)", len(user_input.split()))
-    col_y.metric("Character Count (c)", len(user_input))
 
 # --- OUTPUT ARCHITECTURE ---
 if st.session_state.ai_result:
     st.markdown('<div class="result-card">', unsafe_allow_html=True)
     st.markdown(st.session_state.ai_result)
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.write(" ")
     st.download_button("📩 EXPORT_LOG", st.session_state.ai_result, file_name="AUSTIN_AI_DATA.txt")
 
 # --- FOOTER ---
