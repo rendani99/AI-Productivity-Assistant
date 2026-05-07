@@ -8,20 +8,20 @@ import time
 # --- SYSTEM CONFIGURATION ---
 load_dotenv()
 
-# Logic: Check for Cloud Secrets first, fallback to Local .env
+# Universal Key Logic: Prioritize Streamlit Cloud Secrets, fallback to Local .env
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except (KeyError, FileNotFoundError, AttributeError, Exception):
     api_key = os.getenv("GOOGLE_API_KEY")
 
 if api_key:
-    # Initialize the New GenAI Client
+    # Initialize the Modern GenAI Client
     client = genai.Client(api_key=api_key)
 else:
-    st.error("SYSTEM AUTHENTICATION FAILED: No API Key found in .env file.")
+    st.error("SYSTEM AUTHENTICATION FAILED: API Key missing.")
     st.stop()
 
-# --- THE PURE DARK AUSTIN THEME ---
+# --- THE EXECUTIVE AUSTIN THEME ---
 def apply_austin_theme():
     st.markdown("""
         <style>
@@ -88,11 +88,11 @@ if "ai_result" not in st.session_state:
 st.set_page_config(page_title="AUSTIN AI", layout="wide")
 apply_austin_theme()
 
-# --- HEADER ---
+# --- HEADER BRANDING ---
 c1, c2 = st.columns([0.8, 0.2])
 with c1:
     st.markdown("<h1 style='letter-spacing: 4px; color: #00f2ff; margin-bottom: 0;'>AUSTIN AI</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #64ffda; font-weight: 500; font-size: 1.2rem;'>BSc MATHEMATICAL SCIENCES | UNIVERSITY OF LIMPOPO</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64ffda; font-weight: 500; font-size: 1.2rem; letter-spacing: 2px;'>BSc MATHEMATICAL SCIENCES | UNIVERSITY OF LIMPOPO</p>", unsafe_allow_html=True)
 with c2:
     if st.button("[ RESET_CORE ]"):
         if os.path.exists(SAVE_FILE): os.remove(SAVE_FILE)
@@ -115,6 +115,7 @@ with st.sidebar:
     st.markdown("<b style='color: #64ffda;'>ENGINEER_STAMP</b>", unsafe_allow_html=True)
     st.markdown("<p style='color: #ccd6f6; margin-bottom: 0;'>R. Austin Mmola</p>", unsafe_allow_html=True)
     st.caption("Computer Science & Statistics")
+    st.caption("Midrand Node // 2026")
 
 # --- WORKSPACE ---
 tab_cmd, tab_data = st.tabs(["[ TERMINAL ]", "[ METRICS ]"])
@@ -122,7 +123,8 @@ tab_cmd, tab_data = st.tabs(["[ TERMINAL ]", "[ METRICS ]"])
 with tab_cmd:
     user_input = st.text_area("DATA_INJECTION_POINT", 
                               value=st.session_state.user_input, 
-                              height=320)
+                              height=320,
+                              placeholder="Inject data for AI synthesis...")
 
     if user_input != st.session_state.user_input:
         st.session_state.user_input = user_input
@@ -136,18 +138,27 @@ with tab_cmd:
                     lang_inst = f"Output in {language}." if language != "English" else ""
                     final_prompt = f"Role: {SYSTEM_PROMPTS[task]}\\nConstraint: {tone}. {lang_inst}\\nData: {user_input}"
                     
-                    # --- DIRECT CALL WITH ERROR CAPTURE ---
-                    try:
-                        response = client.models.generate_content(
-                            model='gemini-1.5-flash',
-                            contents=final_prompt
-                        )
+                    # --- THE 404 BYPASS LOGIC (Multi-Model Handshake) ---
+                    response = None
+                    # List of stable model names to try in sequence
+                    models_to_try = ["gemini-1.5-flash", "gemini-1.0-pro"]
+                    
+                    for model_name in models_to_try:
+                        try:
+                            response = client.models.generate_content(
+                                model=model_name,
+                                contents=final_prompt
+                            )
+                            if response:
+                                break
+                        except Exception:
+                            continue # Try the next available model
+                    
+                    if response:
                         st.session_state.ai_result = response.text
                         status.update(label="SYNTHESIS COMPLETE", state="complete", expanded=False)
-                    except Exception as api_err:
-                        # This prints the REAL reason it fails to the screen
-                        st.error(f"ENGINE FAILURE: {str(api_err)}")
-                        st.info("Ensure your API key in the .env file is correct.")
+                    else:
+                        st.error("ENGINE FAILURE: Your API Key does not have permission for the requested models.")
                 except Exception as e:
                     st.error(f"SYSTEM_ERROR: {str(e)}")
 
@@ -162,6 +173,8 @@ if st.session_state.ai_result:
     st.markdown('<div class="result-card">', unsafe_allow_html=True)
     st.markdown(st.session_state.ai_result)
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.write(" ")
     st.download_button("📩 EXPORT_LOG", st.session_state.ai_result, file_name="AUSTIN_AI_DATA.txt")
 
 # --- FOOTER ---
